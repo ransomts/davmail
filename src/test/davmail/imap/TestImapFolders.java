@@ -40,6 +40,22 @@ public class TestImapFolders extends AbstractImapTestCase {
         assertEquals(". OK LIST completed", readFullAnswer("."));
     }
 
+    public void testDeleteJunkSubFolder() throws IOException {
+        // Exchange refuses to delete a folder under Junk Email in place
+        String folderName = "Junk/davmailtest" + System.currentTimeMillis();
+        writeLine(". CREATE " + folderName);
+        assertEquals(". OK folder created", readFullAnswer("."));
+        writeLine(". DELETE " + folderName);
+        assertEquals(". OK folder deleted", readFullAnswer("."));
+        writeLine(". LIST \"\" \"Junk/*\"");
+        String line = readLine();
+        while (!line.startsWith(".")) {
+            assertFalse(line, line.endsWith(folderName + '"'));
+            line = readLine();
+        }
+        assertEquals(". OK LIST completed", line);
+    }
+
     public void testSelectInbox() throws IOException {
         writeLine(". SELECT INBOX");
         assertEquals(". OK [READ-WRITE] SELECT completed", readFullAnswer("."));

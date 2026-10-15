@@ -3764,14 +3764,43 @@ public class GraphExchangeSession extends ExchangeSession {
                 if (folderId.isContact()) {
                     objectType = "contactFolders";
                 }
-                executeJsonRequest(new GraphRequestBuilder()
-                        .setMethod(HttpDelete.METHOD_NAME)
-                        .setMailbox(folderId.mailbox)
-                        .setObjectType(objectType)
-                        .setObjectId(folderId.id));
+                try {
+                    executeJsonRequest(new GraphRequestBuilder()
+                            .setMethod(HttpDelete.METHOD_NAME)
+                            .setMailbox(folderId.mailbox)
+                            .setObjectType(objectType)
+                            .setObjectId(folderId.id));
+                } catch (HttpForbiddenException e) {
+                    if (folderId.isContact() || e.getMessage() == null || !e.getMessage().contains("ErrorCannotDeleteObject")) {
+                        throw e;
+                    }
+                    // Exchange refuses to delete some folders in place, e.g. under Junk Email:
+                    // move folder to Deleted Items and delete it from there
+                    LOGGER.debug("Unable to delete folder " + folderPath + " in place, move to Deleted Items first");
+                    deleteFolderFromDeletedItems(folderId);
+                }
             }
         }
 
+    }
+
+    private void deleteFolderFromDeletedItems(FolderId folderId) throws IOException {
+        try {
+            JSONObject movedFolder = executeJsonRequest(new GraphRequestBuilder()
+                    .setMethod(HttpPost.METHOD_NAME)
+                    .setMailbox(folderId.mailbox)
+                    .setObjectType("mailFolders")
+                    .setObjectId(folderId.id)
+                    .setChildType("move")
+                    .setJsonBody(new JSONObject().put("destinationId", WellKnownFolderName.deleteditems.name())));
+            executeJsonRequest(new GraphRequestBuilder()
+                    .setMethod(HttpDelete.METHOD_NAME)
+                    .setMailbox(folderId.mailbox)
+                    .setObjectType("mailFolders")
+                    .setObjectId(movedFolder.getString("id")));
+        } catch (JSONException e) {
+            throw new IOException(e);
+        }
     }
 
     @Override
