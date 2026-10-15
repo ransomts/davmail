@@ -3536,10 +3536,10 @@ public class GraphExchangeSession extends ExchangeSession {
             currentFolderId = new FolderId(mailbox, WellKnownFolderName.contacts, FolderId.IPF_CONTACT);
             folderNames = folderPath.substring(CONTACTS.length()).split("/");
         } else if (isSubFolderOf(folderPath, SENT)) {
-            currentFolderId = new FolderId(mailbox, WellKnownFolderName.sentitems);
+            currentFolderId = getWellKnownFolderId(mailbox, WellKnownFolderName.sentitems);
             folderNames = folderPath.substring(SENT.length()).split("/");
         } else if (isSubFolderOf(folderPath, DRAFTS)) {
-            currentFolderId = new FolderId(mailbox, WellKnownFolderName.drafts);
+            currentFolderId = getWellKnownFolderId(mailbox, WellKnownFolderName.drafts);
             folderNames = folderPath.substring(DRAFTS.length()).split("/");
         } else if (isSubFolderOf(folderPath, TRASH)) {
             currentFolderId = getWellKnownFolderId(mailbox, WellKnownFolderName.deleteditems);
@@ -3548,10 +3548,10 @@ public class GraphExchangeSession extends ExchangeSession {
             currentFolderId = getWellKnownFolderId(mailbox, WellKnownFolderName.deleteditems);
             folderNames = folderPath.substring(WellKnownFolderName.deleteditems.name().length()).split("/");
         } else if (isSubFolderOf(folderPath, JUNK)) {
-            currentFolderId = new FolderId(mailbox, WellKnownFolderName.junkemail);
+            currentFolderId = getWellKnownFolderId(mailbox, WellKnownFolderName.junkemail);
             folderNames = folderPath.substring(JUNK.length()).split("/");
         } else if (isSubFolderOf(folderPath, UNSENT)) {
-            currentFolderId = new FolderId(mailbox, WellKnownFolderName.outbox);
+            currentFolderId = getWellKnownFolderId(mailbox, WellKnownFolderName.outbox);
             folderNames = folderPath.substring(UNSENT.length()).split("/");
         } else {
             currentFolderId = getWellKnownFolderId(mailbox, WellKnownFolderName.msgfolderroot);

@@ -40,6 +40,28 @@ public class TestImapFolders extends AbstractImapTestCase {
         assertEquals(". OK LIST completed", readFullAnswer("."));
     }
 
+    public void testListWellKnownSubFolders() throws IOException {
+        String folderName = "davmailtest" + System.currentTimeMillis();
+        for (String parent : new String[]{"Sent", "Drafts"}) {
+            writeLine(". CREATE " + parent + '/' + folderName);
+            assertEquals(". OK folder created", readFullAnswer("."));
+            try {
+                writeLine(". LIST \"\" \"" + parent + "/*\"");
+                boolean found = false;
+                String line = readLine();
+                while (!line.startsWith(".")) {
+                    found = found || line.endsWith('/' + folderName + '"');
+                    line = readLine();
+                }
+                assertEquals(". OK LIST completed", line);
+                assertTrue(parent + '/' + folderName + " not listed", found);
+            } finally {
+                writeLine(". DELETE " + parent + '/' + folderName);
+                assertEquals(". OK folder deleted", readFullAnswer("."));
+            }
+        }
+    }
+
     public void testSelectInbox() throws IOException {
         writeLine(". SELECT INBOX");
         assertEquals(". OK [READ-WRITE] SELECT completed", readFullAnswer("."));
