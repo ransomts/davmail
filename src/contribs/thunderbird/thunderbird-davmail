@@ -1,0 +1,47 @@
+#!/bin/sh
+#
+# thunderbird-davmail: start DavMail if it is not already running, then Thunderbird
+#
+# Usage: thunderbird-davmail [thunderbird options]
+#
+# Use it in place of thunderbird in a launcher or desktop file, e.g.
+#   Exec=/path/to/thunderbird-davmail %u
+#
+# DAVMAIL, DAVMAIL_PROPERTIES and THUNDERBIRD can be overridden, e.g.
+#   DAVMAIL_PROPERTIES=$HOME/work.properties thunderbird-davmail
+#
+# Distributed under the terms of the GNU General Public License
+#
+: "${DAVMAIL:=davmail}"
+: "${THUNDERBIRD:=thunderbird}"
+
+# same lookup as DavMail when no properties file is given
+if [ -z "$DAVMAIL_PROPERTIES" ]; then
+  if [ -f "$HOME/.davmail.properties" ]; then
+    DAVMAIL_PROPERTIES="$HOME/.davmail.properties"
+  else
+    DAVMAIL_PROPERTIES="${XDG_CONFIG_HOME:-$HOME/.config}/davmail/davmail.properties"
+  fi
+fi
+
+if ! pgrep -u "$(id -u)" -f 'davmail\.DavGateway' > /dev/null; then
+  if [ -f "$DAVMAIL_PROPERTIES" ]; then
+    nohup "$DAVMAIL" "$DAVMAIL_PROPERTIES" > /dev/null 2>&1 &
+  else
+    nohup "$DAVMAIL" > /dev/null 2>&1 &
+  fi
+
+  # wait up to 30 seconds for the IMAP port, so Thunderbird does not start with connection errors
+  IMAP_PORT=$(sed -n 's/^davmail\.imapPort=[[:space:]]*\([0-9]*\).*/\1/p' "$DAVMAIL_PROPERTIES" 2> /dev/null)
+  if [ -n "$IMAP_PORT" ] && command -v ss > /dev/null; then
+    i=0
+    while [ $i -lt 30 ] && ! ss -ltnH "sport = :$IMAP_PORT" | grep -q .; do
+      sleep 1
+      i=$((i + 1))
+    done
+  else
+    sleep 5
+  fi
+fi
+
+exec "$THUNDERBIRD" "$@"
