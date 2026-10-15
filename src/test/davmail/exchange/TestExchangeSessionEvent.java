@@ -194,6 +194,36 @@ public class TestExchangeSessionEvent extends TestCase {
         assertTrue(toServer.contains("ACTION:DISPLAY"));
     }
 
+    protected String buildAlarmEvent(String trigger) {
+        return "BEGIN:VCALENDAR\n" +
+                "BEGIN:VEVENT\n" +
+                "BEGIN:VALARM\n" +
+                "DESCRIPTION:REMINDER\n" +
+                (trigger != null ? trigger + "\n" : "") +
+                "ACTION:DISPLAY\n" +
+                "END:VALARM\n" +
+                "END:VEVENT\n" +
+                "END:VCALENDAR";
+    }
+
+    public void testReminderMinutesBeforeStart() throws IOException {
+        String[][] triggers = {
+                {"TRIGGER:-PT15M", "15"},
+                {"TRIGGER:-PT2H", "120"},
+                {"TRIGGER:-PT1H30M", "90"},
+                {"TRIGGER:-P1D", "1440"},
+                {"TRIGGER:-P1DT2H", "1560"},
+                {"TRIGGER:-P1W", "10080"},
+                {"TRIGGER:PT0S", "0"},
+                {"TRIGGER:PT15M", "0"},
+                {"TRIGGER;RELATED=START:P", "0"},
+        };
+        for (String[] trigger : triggers) {
+            VCalendar vCalendar = new VCalendar(buildAlarmEvent(trigger[0]), email, vTimeZone);
+            assertEquals(trigger[0], trigger[1], vCalendar.getReminderMinutesBeforeStart());
+        }
+    }
+
     public void testReceiveAllDay() throws IOException {
         String itemBody = "BEGIN:VCALENDAR\n" +
                 vTimeZone +

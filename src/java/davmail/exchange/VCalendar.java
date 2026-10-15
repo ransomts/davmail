@@ -27,12 +27,15 @@ import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * VCalendar object.
  */
 public class VCalendar extends VObject {
     protected static final Logger LOGGER = Logger.getLogger(VCalendar.class);
+    private static final Pattern DURATION_PATTERN = Pattern.compile("([+-])?P(?:(\\d+)W)?(?:(\\d+)D)?(?:T(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?)?");
     protected VObject firstVevent;
     protected VObject vTimezone;
     protected String email;
@@ -554,6 +557,32 @@ public class VCalendar extends VObject {
     }
 
     /**
+     * Parse an iCalendar duration.
+     *
+     * @param duration duration value, e.g. -PT15M or -P1DT2H
+     * @return duration in seconds, negative before the anchor, null if invalid or empty
+     */
+    protected static Long parseDuration(String duration) {
+        if (duration == null) {
+            return null;
+        }
+        String value = duration.trim();
+        Matcher matcher = DURATION_PATTERN.matcher(value);
+        if (!matcher.matches() || value.endsWith("P") || value.endsWith("T")) {
+            return null;
+        }
+        long seconds = 0;
+        long[] units = {7 * 24 * 3600, 24 * 3600, 3600, 60, 1};
+        for (int i = 0; i < units.length; i++) {
+            String group = matcher.group(i + 2);
+            if (group != null) {
+                seconds += Long.parseLong(group) * units[i];
+            }
+        }
+        return "-".equals(matcher.group(1)) ? -seconds : seconds;
+    }
+
+    /**
      * Replace iCal4 (Snow Leopard) principal paths with mailto expression
      *
      * @param value attendee value or ics line
@@ -720,23 +749,10 @@ public class VCalendar extends VObject {
             for (VObject vObject : vObjects) {
                 if (vObject.vObjects != null && !vObject.vObjects.isEmpty() &&
                         vObject.vObjects.get(0).isVAlarm()) {
-                    String trigger = vObject.vObjects.get(0).getPropertyValue("TRIGGER");
-                    if (trigger != null) {
-                        if (trigger.startsWith("-PT") && trigger.endsWith("M")) {
-                            result = trigger.substring(3, trigger.length() - 1);
-                        } else if (trigger.startsWith("-PT") && trigger.endsWith("H")) {
-                            result = trigger.substring(3, trigger.length() - 1);
-                            // convert to minutes
-                            result = String.valueOf(Integer.parseInt(result) * 60);
-                        } else if (trigger.startsWith("-P") && trigger.endsWith("D")) {
-                            result = trigger.substring(2, trigger.length() - 1);
-                            // convert to minutes
-                            result = String.valueOf(Integer.parseInt(result) * 60 * 24);
-                        } else if (trigger.startsWith("-P") && trigger.endsWith("W")) {
-                            result = trigger.substring(2, trigger.length() - 1);
-                            // convert to minutes
-                            result = String.valueOf(Integer.parseInt(result) * 60 * 24 * 7);
-                        }
+                    Long seconds = parseDuration(vObject.vObjects.get(0).getPropertyValue("TRIGGER"));
+                    // Exchange reminders are minutes before start
+                    if (seconds != null && seconds < 0) {
+                        result = String.valueOf(-seconds / 60);
                     }
                 }
             }

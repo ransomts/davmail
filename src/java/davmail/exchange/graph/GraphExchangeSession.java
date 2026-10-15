@@ -422,10 +422,8 @@ public class GraphExchangeSession extends ExchangeSession {
                 VObject vAlarm = new VObject();
                 vAlarm.type = "VALARM";
                 vAlarm.addPropertyValue("ACTION", "DISPLAY");
-                int reminderMinutesBeforeStart = jsonEvent.optInt("reminderMinutesBeforeStart");
-                if (reminderMinutesBeforeStart > 0) {
-                    vAlarm.addPropertyValue("TRIGGER", "-PT" + reminderMinutesBeforeStart + "M");
-                }
+                // TRIGGER is required, 0 minutes is a reminder at start time
+                vAlarm.addPropertyValue("TRIGGER", "-PT" + jsonEvent.optInt("reminderMinutesBeforeStart") + "M");
                 vEvent.addVObject(vAlarm);
             }
 
