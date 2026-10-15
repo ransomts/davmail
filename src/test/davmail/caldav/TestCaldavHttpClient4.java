@@ -30,6 +30,7 @@ import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpOptions;
 import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
@@ -50,7 +51,9 @@ import org.apache.jackrabbit.webdav.xml.Namespace;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
+import java.util.Base64;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
@@ -360,6 +363,23 @@ public class TestCaldavHttpClient4 extends AbstractDavMailTestCase {
 
         }
 
+    }
+
+    public void testOptionsUnauthenticated() throws IOException {
+        try (HttpClientAdapter anonymousClient = new HttpClientAdapter("http://localhost:" + Settings.getProperty("davmail.caldavPort"));
+             CloseableHttpResponse response = anonymousClient.execute(new HttpOptions("/"))) {
+            assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+            assertEquals("OPTIONS, PROPFIND, HEAD, GET, REPORT", response.getFirstHeader("Allow").getValue());
+        }
+    }
+
+    public void testOptionsAuthenticated() throws IOException {
+        HttpOptions method = new HttpOptions("/");
+        method.setHeader("Authorization", "Basic " + Base64.getEncoder().encodeToString((username + ':' + password).getBytes(StandardCharsets.UTF_8)));
+        try (CloseableHttpResponse response = httpClient.execute(method)) {
+            assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+            assertTrue(response.getFirstHeader("Allow").getValue().contains("PUT, DELETE"));
+        }
     }
 
 }

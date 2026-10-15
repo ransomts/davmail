@@ -186,8 +186,9 @@ public class CaldavConnection extends AbstractConnection {
                 setSocketTimeout(headers.get("keep-alive"));
                 // client requested connection close
                 closed = "close".equals(headers.get("connection"));
-                if ("OPTIONS".equals(command)) {
-                    sendOptions();
+                if ("OPTIONS".equals(command) && !headers.containsKey("authorization")) {
+                    // list write methods only to authenticated clients
+                    sendOptions(false);
                 } else if (!headers.containsKey("authorization")) {
                     sendUnauthorized();
                 } else {
@@ -242,7 +243,7 @@ public class CaldavConnection extends AbstractConnection {
     public void handleRequest(String command, String path, Map<String, String> headers, String body) throws IOException {
         CaldavRequest request = new CaldavRequest(command, path, headers, body);
         if (request.isOptions()) {
-            sendOptions();
+            sendOptions(true);
         } else if (request.isHead() && request.isRoot()) {
             sendChunkedHttpResponse(HttpStatus.SC_OK, null);
         } else if (request.isPropFind() && request.isRoot()) {
@@ -1264,11 +1265,16 @@ public class CaldavConnection extends AbstractConnection {
     /**
      * Send OPTIONS response.
      *
+     * @param authenticated list write methods only to authenticated clients
      * @throws IOException on error
      */
-    public void sendOptions() throws IOException {
+    public void sendOptions(boolean authenticated) throws IOException {
         HashMap<String, String> headers = new HashMap<>();
-        headers.put("Allow", "OPTIONS, PROPFIND, HEAD, GET, REPORT, PROPPATCH, PUT, DELETE, POST");
+        if (authenticated) {
+            headers.put("Allow", "OPTIONS, PROPFIND, HEAD, GET, REPORT, PROPPATCH, PUT, DELETE, POST");
+        } else {
+            headers.put("Allow", "OPTIONS, PROPFIND, HEAD, GET, REPORT");
+        }
         sendHttpResponse(HttpStatus.SC_OK, headers);
     }
 
