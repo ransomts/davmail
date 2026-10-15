@@ -424,7 +424,7 @@ public class VCalendar extends VObject {
 
     protected void updateTzid(String tzid, String newTzid) {
         for (VObject vObject : vObjects) {
-            if (vObject.isVEvent() || vObject.isVTodo()) {
+            if ((vObject.isVEvent() || vObject.isVTodo()) && vObject.properties != null) {
                 for (VProperty vProperty : vObject.properties) {
                     if (tzid.equalsIgnoreCase(vProperty.getParamValue("TZID"))) {
                         vProperty.setParam("TZID", newTzid);

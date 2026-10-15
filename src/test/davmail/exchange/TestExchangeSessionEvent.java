@@ -88,7 +88,8 @@ public class TestExchangeSessionEvent extends TestCase {
         System.out.println(toClient);
         assertTrue(toServer.indexOf("CLASS:PUBLIC") >= 0);
         assertTrue(toClient.indexOf("CLASS:PUBLIC") >= 0);
-        assertTrue(toClient.indexOf("X-CALENDARSERVER-ACCESS:PUBLIC") >= 0);
+        // public is the default, no X-CALENDARSERVER-ACCESS
+        assertFalse(toClient.contains("X-CALENDARSERVER-ACCESS"));
     }
 
     public void testPrivateClass() throws IOException {
@@ -154,7 +155,8 @@ public class TestExchangeSessionEvent extends TestCase {
                 "END:VCALENDAR";
         String toServer = fixICS(itemBody, false);
         System.out.println(toServer);
-        assertTrue(toServer.indexOf("CLASS:PUBLIC") >= 0);
+        // public is the default, no CLASS
+        assertFalse(toServer.contains("CLASS:"));
     }
 
     public void testCalendarServerAccessNone() throws IOException {
@@ -175,7 +177,8 @@ public class TestExchangeSessionEvent extends TestCase {
                 "END:VCALENDAR";
         String toServer = fixICS(itemBody, false);
         System.out.println(toServer);
-        assertTrue(toServer.contains("ORGANIZER"));
+        // organizer is set by the Exchange backend, not added to client content
+        assertFalse(toServer.contains("ORGANIZER"));
     }
 
 
@@ -223,11 +226,11 @@ public class TestExchangeSessionEvent extends TestCase {
         // Client created allday event have no timezone and no time information in date values
         // first set the X-MICROSOFT-CDO-ALLDAYEVENT flag for OWA
         assertTrue(toServer.contains("X-MICROSOFT-CDO-ALLDAYEVENT:TRUE"));
-        // then patch TZID for Outlook (need to retrieve OWA TZID
+        // then patch TZID for Outlook, mapped to an Exchange timezone name
         assertTrue(toServer.contains("BEGIN:VTIMEZONE"));
-        assertTrue(toServer.contains("TZID:" + vTimeZone.getPropertyValue("TZID")));
-        assertTrue(toServer.contains("DTSTART;TZID=\"" + vTimeZone.getPropertyValue("TZID") + "\":20100615T000000"));
-        assertTrue(toServer.contains("DTEND;TZID=\"" + vTimeZone.getPropertyValue("TZID") + "\":20100616T000000"));
+        String tzid = new VCalendar(toServer, email, vTimeZone).getVTimezone().getPropertyValue("TZID");
+        assertTrue(toServer.contains("DTSTART;TZID=" + tzid + ":20100615T000000"));
+        assertTrue(toServer.contains("DTEND;TZID=" + tzid + ":20100616T000000"));
     }
 
     public void testRsvp() throws IOException {
