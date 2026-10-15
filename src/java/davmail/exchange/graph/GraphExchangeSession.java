@@ -3223,6 +3223,14 @@ public class GraphExchangeSession extends ExchangeSession {
         return folders;
     }
 
+    @Override
+    public List<ExchangeSession.Folder> getSubContactFolders(String folderPath, boolean recursive) throws IOException {
+        List<ExchangeSession.Folder> folders = new ArrayList<>();
+        // contact folder children are contact folders, no folderclass filter
+        appendSubFolders(folders, getSubfolderPath(folderPath), getFolderId(folderPath), null, recursive);
+        return folders;
+    }
+
     protected void appendSubFolders(List<ExchangeSession.Folder> folders,
                                     String parentFolderPath, FolderId parentFolderId,
                                     Condition condition, boolean recursive) throws IOException {
@@ -3230,7 +3238,7 @@ public class GraphExchangeSession extends ExchangeSession {
 
         GraphRequestBuilder httpRequestBuilder = new GraphRequestBuilder()
                 .setMethod(HttpGet.METHOD_NAME)
-                .setObjectType("mailFolders")
+                .setObjectType(parentFolderId.isContact() ? "contactFolders" : "mailFolders")
                 .setMailbox(parentFolderId.mailbox)
                 .setObjectId(parentFolderId.id)
                 .setChildType("childFolders")
@@ -3242,8 +3250,8 @@ public class GraphExchangeSession extends ExchangeSession {
         while (graphIterator.hasNext()) {
             Folder folder = buildFolder(graphIterator.next());
             folder.folderId.mailbox = parentFolderId.mailbox;
-            // check parentFolder
-            if (parentFolderId.id.equals(folder.folderId.parentFolderId)) {
+            // check parentFolder, contacts root id is the well-known name, not the actual parent id
+            if (parentFolderId.isContact() || parentFolderId.id.equals(folder.folderId.parentFolderId)) {
                 if (!parentFolderPath.isEmpty()) {
                     if (parentFolderPath.endsWith("/")) {
                         folder.folderPath = parentFolderPath + folder.displayName;

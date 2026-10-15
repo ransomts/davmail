@@ -265,6 +265,33 @@ public class TestCaldavHttpClient4 extends AbstractDavMailTestCase {
         assertEquals(HttpStatus.SC_OK, getResponse.getStatusLine().getStatusCode());
     }
 
+    public void testContactSubFolder() throws IOException {
+        // unique name: a deleted contact folder stays in Deleted Items and blocks deleting another one with the same name
+        String folderName = "davmail255test" + System.currentTimeMillis();
+        session.createContactFolder("contacts/" + folderName, null);
+        try {
+            DavPropertyNameSet davPropertyNameSet = new DavPropertyNameSet();
+            davPropertyNameSet.add(DavPropertyName.DISPLAYNAME);
+            davPropertyNameSet.add(DavPropertyName.RESOURCETYPE);
+            HttpPropfind method = new HttpPropfind("/users/" + session.getEmail() + "/contacts/", davPropertyNameSet, 1);
+            MultiStatusResponse subFolderResponse = null;
+            for (MultiStatusResponse response : httpClient.executeDavRequest(method).getResponses()) {
+                if (response.getHref().endsWith("/contacts/" + folderName + '/')) {
+                    subFolderResponse = response;
+                }
+            }
+            assertNotNull("contact sub folder not listed", subFolderResponse);
+            assertEquals(folderName, subFolderResponse.getProperties(HttpStatus.SC_OK).get(DavPropertyName.DISPLAYNAME).getValue());
+
+            // sub folder is an address book
+            method = new HttpPropfind("/users/" + session.getEmail() + "/contacts/" + folderName + '/', davPropertyNameSet, 0);
+            MultiStatusResponse[] responses = httpClient.executeDavRequest(method).getResponses();
+            assertEquals(1, responses.length);
+        } finally {
+            session.deleteFolder("contacts/" + folderName);
+        }
+    }
+
     public void testPropfindPrincipal() throws IOException {
         //Settings.setLoggingLevel("httpclient.wire", Level.DEBUG);
 

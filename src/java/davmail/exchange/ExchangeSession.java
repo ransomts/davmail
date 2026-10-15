@@ -744,6 +744,18 @@ public abstract class ExchangeSession {
         return getSubFolders(folderName, isEqualTo("folderclass", "IPF.Appointment"), recursive);
     }
 
+    /**
+     * Search contact folders under given folder.
+     *
+     * @param folderName Exchange folder name
+     * @param recursive  deep search if true
+     * @return list of folders
+     * @throws IOException on error
+     */
+    public List<Folder> getSubContactFolders(String folderName, boolean recursive) throws IOException {
+        return getSubFolders(folderName, isEqualTo("folderclass", "IPF.Contact"), recursive);
+    }
+
 
     /**
      * Extract sub folder path from folder path.

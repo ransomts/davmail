@@ -744,6 +744,9 @@ public class CaldavConnection extends AbstractConnection {
         if (request.getDepth() == 1) {
             if (folder.isContact()) {
                 contacts = session.getAllContacts(folderPath, !isOldCardavClient(request) && !request.isLightning());
+                if (!folderPath.startsWith("/public")) {
+                    folderList = session.getSubContactFolders(folderPath, false);
+                }
             } else if (folder.isCalendar() || folder.isTask()) {
                 events = session.getAllEvents(folderPath);
                 if (!folderPath.startsWith("/public")) {
@@ -760,11 +763,11 @@ public class CaldavConnection extends AbstractConnection {
                 appendContactsResponses(response, request, contacts);
             } else if (folder.isCalendar() || folder.isTask()) {
                 appendEventsResponses(response, request, events);
-                // Send sub folders for multi-calendar support under iCal, except for public folders
-                if (folderList != null) {
-                    for (ExchangeSession.Folder subFolder : folderList) {
-                        appendFolderOrItem(response, request, subFolder, subFolder.folderPath.substring(subFolder.folderPath.indexOf('/') + 1), true);
-                    }
+            }
+            // Send sub folders for multi-calendar and multi-addressbook support, except for public folders
+            if (folderList != null) {
+                for (ExchangeSession.Folder subFolder : folderList) {
+                    appendFolderOrItem(response, request, subFolder, subFolder.folderPath.substring(subFolder.folderPath.indexOf('/') + 1), true);
                 }
             }
         }
