@@ -52,6 +52,8 @@ public class GraphRequestBuilder {
     String method = "POST";
     String url;
 
+    String path;
+
     String contentType = "application/json";
 
     String baseUrl = Settings.getGraphUrl();
@@ -148,6 +150,18 @@ public class GraphRequestBuilder {
      */
     public GraphRequestBuilder setSkipAuthorization() {
         this.skipAuthorization = true;
+        return this;
+    }
+
+    /**
+     * Set request path relative to the versioned graph root, e.g. $batch.
+     * Overrides path computed from object type.
+     *
+     * @param path request path
+     * @return this
+     */
+    public GraphRequestBuilder setPath(String path) {
+        this.path = path;
         return this;
     }
 
@@ -295,6 +309,10 @@ public class GraphRequestBuilder {
     protected String buildPath() {
         StringBuilder buffer = new StringBuilder();
         buffer.append("/").append(version);
+        if (path != null) {
+            buffer.append("/").append(path);
+            return buffer.toString();
+        }
         if ("orgcontacts".equals(objectType)) {
             // global org contact search
             buffer.append("/contacts");

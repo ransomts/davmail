@@ -237,6 +237,7 @@ public final class Settings {
         SETTINGS_PROPERTIES.put("davmail.server.certificate.hash", "");
         SETTINGS_PROPERTIES.put("davmail.caldavAlarmSound", "");
         SETTINGS_PROPERTIES.put("davmail.carddavReadPhoto", Boolean.TRUE.toString());
+        SETTINGS_PROPERTIES.put("davmail.graphManager", Boolean.FALSE.toString());
         SETTINGS_PROPERTIES.put("davmail.forceActiveSyncUpdate", Boolean.FALSE.toString());
         if (isLinux()) {
             SETTINGS_PROPERTIES.put("davmail.enableTray", Boolean.FALSE.toString());

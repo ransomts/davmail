@@ -80,6 +80,7 @@ import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.Enumeration;
@@ -107,6 +108,17 @@ import java.util.zip.GZIPInputStream;
 public class GraphExchangeSession extends ExchangeSession {
 
     protected static final int PAGE_SIZE = 500;
+
+    /**
+     * Maximum number of requests in a single $batch call, see
+     * https://learn.microsoft.com/en-us/graph/json-batching
+     */
+    protected static final int MANAGER_BATCH_SIZE = 20;
+
+    /**
+     * GAL manager cache TTL, managers change rarely and GAL search is called on each autocomplete request.
+     */
+    protected static final long MANAGER_CACHE_TTL = TimeUnit.HOURS.toMillis(1);
 
     static final Map<String, String> statusToBusyStatusMap = new HashMap<>();
 
@@ -4998,7 +5010,194 @@ public class GraphExchangeSession extends ExchangeSession {
             }
         }
 
+        fillManagers(contacts.values(), returningAttributes);
+
         return contacts;
+    }
+
+    /**
+     * GAL manager cache, key is lower case smtp address or user principal name,
+     * empty value means no manager.
+     */
+    protected final Map<String, ManagerCacheEntry> managerCache = new ConcurrentHashMap<>();
+
+    /**
+     * Set when the token does not allow manager lookup, avoids one forbidden request per GAL search.
+     */
+    protected volatile boolean managerLookupDisabled;
+
+    protected static class ManagerCacheEntry {
+        final String manager;
+        final long timestamp;
+
+        protected ManagerCacheEntry(String manager) {
+            this.manager = manager;
+            this.timestamp = System.currentTimeMillis();
+        }
+
+        protected boolean isExpired() {
+            return System.currentTimeMillis() - timestamp > MANAGER_CACHE_TTL;
+        }
+    }
+
+    /**
+     * Fill manager attribute on GAL entries.
+     * Graph people search does not return the manager, it requires a separate users/{id}/manager call,
+     * batched to limit the number of round trips.
+     *
+     * @param contacts           GAL entries
+     * @param returningAttributes requested contact attributes, empty means all attributes
+     */
+    protected void fillManagers(Collection<? extends ExchangeSession.Contact> contacts, Set<String> returningAttributes) {
+        if (!Settings.getBooleanProperty("davmail.graphManager", false) || managerLookupDisabled || contacts.isEmpty()) {
+            return;
+        }
+        // do not issue extra requests when the client does not ask for the manager attribute
+        if (returningAttributes != null && !returningAttributes.isEmpty() && !returningAttributes.contains("manager")) {
+            return;
+        }
+        Map<String, List<ExchangeSession.Contact>> mailToContacts = new HashMap<>();
+        for (ExchangeSession.Contact contact : contacts) {
+            String mail = contact.get("smtpemail1");
+            if (mail == null) {
+                mail = contact.get("userprincipalname");
+            }
+            if (mail == null || mail.isEmpty()) {
+                continue;
+            }
+            mail = mail.toLowerCase(Locale.ROOT);
+            ManagerCacheEntry cacheEntry = managerCache.get(mail);
+            if (cacheEntry != null) {
+                if (!cacheEntry.isExpired()) {
+                    if (!cacheEntry.manager.isEmpty()) {
+                        contact.put("manager", cacheEntry.manager);
+                    }
+                    continue;
+                }
+                managerCache.remove(mail);
+            }
+            List<ExchangeSession.Contact> mailContacts = mailToContacts.get(mail);
+            if (mailContacts == null) {
+                mailContacts = new ArrayList<>();
+                mailToContacts.put(mail, mailContacts);
+            }
+            mailContacts.add(contact);
+        }
+        if (mailToContacts.isEmpty()) {
+            return;
+        }
+
+        List<String> mails = new ArrayList<>(mailToContacts.keySet());
+        for (int i = 0; i < mails.size() && !managerLookupDisabled; i += MANAGER_BATCH_SIZE) {
+            List<String> batchMails = new ArrayList<>(mails.subList(i, Math.min(i + MANAGER_BATCH_SIZE, mails.size())));
+            try {
+                Map<String, String> managers = getManagers(batchMails);
+                for (Map.Entry<String, String> entry : managers.entrySet()) {
+                    String mail = entry.getKey();
+                    String manager = entry.getValue();
+                    managerCache.put(mail, new ManagerCacheEntry(manager == null ? "" : manager));
+                    if (manager != null) {
+                        for (ExchangeSession.Contact contact : mailToContacts.get(mail)) {
+                            contact.put("manager", manager);
+                        }
+                    }
+                }
+            } catch (HttpForbiddenException e) {
+                // most likely a missing User.Read.All scope, do not try again for this session
+                managerLookupDisabled = true;
+                LOGGER.warn("Disable GAL manager lookup, davmail.graphManager requires User.Read.All: " + e.getMessage());
+            } catch (IOException e) {
+                LOGGER.warn("Unable to get GAL managers: " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Get managers for a batch of users.
+     *
+     * @param mails smtp addresses or user principal names, at most MANAGER_BATCH_SIZE entries
+     * @return map of mail to manager display name, null value means no manager
+     * @throws IOException on error
+     */
+    protected Map<String, String> getManagers(List<String> mails) throws IOException {
+        Map<String, String> idToMail = new HashMap<>();
+        JSONObject batchRequest = buildManagerBatchRequest(mails, idToMail);
+        JSONObject response = executeJsonRequest(new GraphRequestBuilder()
+                .setMethod(HttpPost.METHOD_NAME)
+                .setPath("$batch")
+                .setJsonBody(batchRequest));
+        return parseManagerBatchResponse(response, idToMail);
+    }
+
+    /**
+     * Build $batch manager lookup request.
+     *
+     * @param mails smtp addresses or user principal names
+     * @param idToMail output batch request id to mail map
+     * @return $batch request body
+     * @throws IOException on error
+     */
+    protected static JSONObject buildManagerBatchRequest(List<String> mails, Map<String, String> idToMail) throws IOException {
+        JSONObject batchRequest = new JSONObject();
+        JSONArray requests = new JSONArray();
+        try {
+            for (String mail : mails) {
+                String id = String.valueOf(idToMail.size() + 1);
+                idToMail.put(id, mail);
+                requests.put(new JSONObject()
+                        .put("id", id)
+                        .put("method", HttpGet.METHOD_NAME)
+                        .put("url", "/users/" + mail + "/manager?$select=displayName"));
+            }
+            batchRequest.put("requests", requests);
+        } catch (JSONException e) {
+            throw new IOException(e.getMessage(), e);
+        }
+        return batchRequest;
+    }
+
+    /**
+     * Parse $batch manager lookup response.
+     *
+     * @param response batch response
+     * @param idToMail batch request id to mail map
+     * @return map of mail to manager display name, null value means no manager
+     * @throws IOException on permission error
+     */
+    protected static Map<String, String> parseManagerBatchResponse(JSONObject response, Map<String, String> idToMail) throws IOException {
+        Map<String, String> managers = new HashMap<>();
+        JSONArray responses = response.optJSONArray("responses");
+        if (responses == null) {
+            throw new IOException("Invalid manager $batch response");
+        }
+        for (int i = 0; i < responses.length(); i++) {
+            JSONObject item = responses.optJSONObject(i);
+            if (item == null) {
+                continue;
+            }
+            String mail = idToMail.get(item.optString("id"));
+            if (mail == null) {
+                continue;
+            }
+            int status = item.optInt("status");
+            if (status == HttpStatus.SC_OK) {
+                JSONObject body = item.optJSONObject("body");
+                String manager = body == null ? null : body.optString("displayName", null);
+                managers.put(mail, manager == null || manager.isEmpty() ? null : manager);
+            } else if (status == HttpStatus.SC_FORBIDDEN) {
+                JSONObject body = item.optJSONObject("body");
+                JSONObject error = body == null ? null : body.optJSONObject("error");
+                throw new HttpForbiddenException(error == null ? null : error.optString("code", null),
+                        "Manager lookup forbidden for " + mail);
+            } else if (status == HttpStatus.SC_NOT_FOUND) {
+                // no manager, or user not found in directory
+                managers.put(mail, null);
+            } else {
+                // throttled or transient error, leave uncached to retry on next search
+                LOGGER.debug("Unable to get manager for " + mail + ", status " + status);
+            }
+        }
+        return managers;
     }
 
     @Override

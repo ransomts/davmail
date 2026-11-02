@@ -217,6 +217,7 @@
                     <fileset dir="src/test" includes="davmail/exchange/TestExchangeSessionContact.java"/>
                     <fileset dir="src/test" includes="davmail/exchange/TestO365EWSExchangeSessionContact.java"/>
                     <fileset dir="src/test" includes="davmail/exchange/TestExchangeSessionCalendar.java"/>
+                    <fileset dir="src/test" includes="davmail/exchange/graph/TestGraphExchangeSessionManager.java"/>
                     <fileset dir="src/test" includes="davmail/util/*.java"/>
                 </batchtest>
             </junit>

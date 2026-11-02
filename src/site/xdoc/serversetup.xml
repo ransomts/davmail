@@ -73,6 +73,10 @@ davmail.url=https://outlook.office365.com/EWS/Exchange.asmx
 #davmail.enableGraph=false
 #davmail.enableOidc=false
 
+# Experimental: fetch GAL managers on Graph backend (LDAP manager attribute)
+# requires User.Read.All on the application, silently disabled when not granted
+#davmail.graphManager=false
+
 
 # Listener ports
 davmail.caldavPort=1080
